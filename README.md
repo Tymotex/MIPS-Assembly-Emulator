@@ -1,2 +1,3 @@
 # MIPS Emulator
-A  MIPS Assembly Language Emulator implemented in C.
+A  MIPS assembly language emulator implemented in C.
+
