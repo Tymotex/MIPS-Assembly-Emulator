@@ -1,0 +1,340 @@
+// If you use C library functions add includes here.
+#include <assert.h>         //TODO: Already included this somewhere
+#include <string.h>
+#include <stdlib.h>
+#include "emu.h"
+#include "ram.h"
+#include "registers.h"
+#include "print_instruction.h"
+
+/**
+ * execute a MIPS instruction
+ * This function should:
+ * get register values by calling `get_register(register_type register_number)`
+ * change registers by calling `set_register(register_type register_number, uint32_t value)`
+ * get memory values by `calling get_byte(uint32_t address)`
+ * changes memory by `set_byte(uint32_t address, uint8_t value)`
+ * updates program_counter to address of next instruction
+ * returns 1 if an exit syscall is executed, 0 otherwise
+ */
+
+// TODO: Create a separate header for extractBitSlice?
+
+static uint32_t extractBitSlice(uint32_t instruction, uint32_t from, uint32_t to);
+void mathOps(uint32_t instruction, char *command, uint32_t *program_counter);
+void loadStoreOps(uint32_t instruction, char *command, uint32_t *program_counter);
+static char *getCommand(uint32_t instruction);
+
+// You implement instructions by appropriately calling the functions get_register, 
+// set_register, get_byte and set_byte. execute_instruction must also update the program counter.
+// ===============================================================================
+
+int execute_instruction(uint32_t instruction, uint32_t *program_counter) {
+
+    // Example code to implement add $8, $9, $10
+
+    //uint32_t x = get_register(9);
+    //uint32_t y = get_register(10);
+    //uint32_t sum = x + y;
+    //set_register(8, sum);
+
+    char *command = getCommand(instruction);
+    mathOps(instruction, command, program_counter);
+
+    free(command);
+    // Update program_counter to address of next instructions
+    // Most instructions will simply do the following:
+    (*program_counter) += 4;
+    // Jump & Branch instructions will do something different
+
+
+    // 0 should be returned, unless an exit syscall is executed
+    return 0;
+}
+// ===============================================================================
+
+void mathOps(uint32_t instruction, char *command, uint32_t *program_counter) {
+    uint32_t dReg = extractBitSlice(instruction, 11, 15);
+    uint32_t sReg = extractBitSlice(instruction, 21, 25);
+    uint32_t tReg = extractBitSlice(instruction, 16, 20);
+    int16_t imm16 = extractBitSlice(instruction, 0, 15);
+    int16_t imm5 = extractBitSlice(instruction, 6, 10);
+    int32_t sContents = get_register(sReg);
+    int32_t tContents = get_register(tReg);
+    
+    if (strcmp(command, "add") == 0) {
+        int32_t result = sContents + tContents;
+        set_register(dReg, result);
+        //printf("%d + %d = %d\n", sContents, tContents, result);
+    } else if (strcmp(command, "sub") == 0) {
+        int32_t result = sContents - tContents;
+        set_register(dReg, result);
+        //printf("%d - %d = %d\n", sContents, tContents, result);
+    } else if (strcmp(command, "mul") == 0) {
+        int32_t result = sContents * tContents;
+        set_register(dReg, result);
+        //printf("%d * %d = %d\n", sContents, tContents, result);
+    } else if (strcmp(command, "and") == 0) {
+        int32_t result = sContents & tContents;
+        set_register(dReg, result);
+        //printf("%d & %d = %d\n", sContents, tContents, result);
+    } else if (strcmp(command, "or") == 0) {
+        int32_t result = sContents | tContents;
+        set_register(dReg, result);
+        //printf("%d | %d = %d\n", sContents, tContents, result);
+    } else if (strcmp(command, "xor") == 0) {
+        int32_t result = sContents ^ tContents;
+        set_register(dReg, result);
+        //printf("%d ^ %d = %d\n", sContents, tContents, result);
+    } else if (strcmp(command, "slt") == 0) {
+        int32_t result = (sContents < tContents);
+        set_register(dReg, result);
+        //printf("(%d < %d) = %d\n", sContents, tContents, result);
+    } else if (strcmp(command, "sllv") == 0) {
+        int32_t result = tContents << sContents;
+        set_register(dReg, result);
+        //printf("%d << %d = %d\n", tContents, sContents, result);
+    } else if (strcmp(command, "srlv") == 0) {
+        int32_t result = tContents >> sContents;
+        set_register(dReg, result);
+        //printf("%d >> %d = %d\n", tContents, sContents, result);
+    } else if (strcmp(command, "addi") == 0) {
+        int32_t result = sContents + imm16;
+        set_register(tReg, result);
+        //printf("%d + %d = %d\n", sContents, imm, result);
+    } else if (strcmp(command, "andi") == 0) {
+        int32_t result = sContents & imm16;
+        set_register(tReg, result);
+        //printf("%d & %d = %d\n", sContents, imm, result);
+    } else if (strcmp(command, "ori") == 0) {
+        int32_t result = sContents | imm16;
+        set_register(tReg, result);
+        //printf("%d | %d = %d\n", sContents, imm, result);
+    } else if (strcmp(command, "xori") == 0) {
+        int32_t result = sContents ^ imm16;
+        set_register(tReg, result);
+        //printf("%d ^ %d = %d\n", sContents, imm, result);
+    } else if (strcmp(command, "slti") == 0) {
+        int32_t result = (sContents < imm16);
+        set_register(tReg, result);
+        //printf("%d ^ %d = %d\n", sContents, imm, result);
+    } else if (strcmp(command, "sll") == 0) {  // TODO: Clean up this
+        uint32_t result = (unsigned int)((unsigned int)tContents << (unsigned int)imm5);
+        set_register(dReg, result);
+        //printf("%d << %d = %d\n", tContents, imm5, result);
+    } else if (strcmp(command, "srl") == 0) {  
+        uint32_t result = (tContents >> imm5);
+        set_register(dReg, result);
+        //printf("%d << %d = %d\n", tContents, imm5, result);
+    } else if (strcmp(command, "srl") == 0) {  
+        uint32_t result = (tContents >> imm5);
+        set_register(dReg, result);
+        //printf("%d << %d = %d\n", tContents, imm5, result);
+    } 
+    (*program_counter) += 4;
+}
+
+
+void loadStoreOps(uint32_t instruction, char *command, uint32_t *program_counter) {
+    uint32_t tReg = extractBitSlice(instruction, 16, 20);
+    uint32_t base = extractBitSlice(instruction, 21, 25);
+    int16_t imm = extractBitSlice(instruction, 0, 15);
+    int16_t offset = extractBitSlice(instruction, 6, 10);
+    int32_t tContents = get_register(tReg);
+
+    if (strcmp(command, "lui") == 0) {
+        
+    } else if (strcmp(command, "lb") == 0) {
+        
+    } else if (strcmp(command, "lh") == 0) {
+        
+    } else if (strcmp(command, "lw") == 0) {
+        
+    } else if (strcmp(command, "sb") == 0) {
+        
+    } else if (strcmp(command, "sh") == 0) {
+        
+    } else if (strcmp(command, "sw") == 0) {
+        
+    }
+
+    (*program_counter) += 4;
+}
+
+
+
+
+
+
+
+
+// ===============================================================================
+
+static uint32_t extractBitSlice(uint32_t instruction, uint32_t from, uint32_t to) {
+    assert(from <= to);
+    uint32_t bitSlice = 0x00000000;
+    for (int i = to; i >= (int)from; i--) {
+        uint32_t currentBit = (instruction >> i) & 0x00000001;
+        bitSlice = bitSlice | (currentBit << i);
+    }
+    return bitSlice >> from;
+}
+
+// ===============================================================================
+static char *getCommand(uint32_t instruction) {
+    char *command = NULL;
+    //printBits(instruction, 1);
+    int leftSix = instruction >> 26;
+    // If the left six bits aren't 000000, then the instruction is uniquely identifiable:
+    if (leftSix != 0u) {
+        switch (leftSix) {
+            case 0x0000001C:
+                command = malloc(sizeof(char) * (strlen("mul") + 1)); 
+                strcpy(command, "mul");
+                return command;
+            case 0x00000008:
+                command = malloc(sizeof(char) * (strlen("addi") + 1)); 
+                strcpy(command, "addi");
+                return command;
+            case 0x0000000C:
+                command = malloc(sizeof(char) * (strlen("andi") + 1)); 
+                strcpy(command, "andi");
+                return command;
+            case 0x0000000D:
+                command = malloc(sizeof(char) * (strlen("ori") + 1)); 
+                strcpy(command, "ori");
+                return command;
+            case 0x0000000E:
+                command = malloc(sizeof(char) * (strlen("xori") + 1)); 
+                strcpy(command, "xori");
+                return command;
+            case 0x0000000A:
+                command = malloc(sizeof(char) * (strlen("slti") + 1)); 
+                strcpy(command, "slti");
+                return command;
+            case 0x0000000F:
+                command = malloc(sizeof(char) * (strlen("lui") + 1)); 
+                strcpy(command, "lui");
+                return command;
+            case 0x00000020:
+                command = malloc(sizeof(char) * (strlen("lb") + 1)); 
+                strcpy(command, "lb");
+                return command;
+            case 0x00000021:
+                command = malloc(sizeof(char) * (strlen("lh") + 1)); 
+                strcpy(command, "lh");
+                return command;
+            case 0x00000023:
+                command = malloc(sizeof(char) * (strlen("lw") + 1)); 
+                strcpy(command, "lw");
+                return command;
+            case 0x00000028:
+                command = malloc(sizeof(char) * (strlen("sb") + 1)); 
+                strcpy(command, "sb");
+                return command;
+            case 0x00000029:
+                command = malloc(sizeof(char) * (strlen("sh") + 1)); 
+                strcpy(command, "sh");
+                return command;
+            case 0x0000002B:
+                command = malloc(sizeof(char) * (strlen("sw") + 1)); 
+                strcpy(command, "sw");
+                return command;
+            case 0x00000004:
+                command = malloc(sizeof(char) * (strlen("beq") + 1)); 
+                strcpy(command, "beq");
+                return command;
+            case 0x00000005:
+                command = malloc(sizeof(char) * (strlen("bne") + 1)); 
+                strcpy(command, "bne");
+                return command;
+            case 0x00000006:
+                command = malloc(sizeof(char) * (strlen("blez") + 1)); 
+                strcpy(command, "blez");
+                return command;
+            case 0x00000007:
+                command = malloc(sizeof(char) * (strlen("bgtz") + 1)); 
+                strcpy(command, "bgtz");
+                return command;
+            case 0x00000002:
+                command = malloc(sizeof(char) * (strlen("j") + 1)); 
+                strcpy(command, "j");
+                return command;
+            case 0x00000003:
+                command = malloc(sizeof(char) * (strlen("jal") + 1)); 
+                strcpy(command, "jal");
+                return command;
+        }
+    }
+    
+    // If the left six bits ARE 000000, then scan the last 6 bits
+    if (leftSix == 0u) {
+        int rightSix = instruction & 0x0000003F; 
+        // If the left six bits are: 000000, then 
+        switch (rightSix) {
+            case 0x00000020:
+                command = malloc(sizeof(char) * (strlen("add") + 1)); 
+                strcpy(command, "add");
+                return command;
+            case 0x00000022:
+                command = malloc(sizeof(char) * (strlen("sub") + 1)); 
+                strcpy(command, "sub");
+                return command;
+            case 0x00000024:
+                command = malloc(sizeof(char) * (strlen("and") + 1)); 
+                strcpy(command, "and");
+                return command;
+            case 0x00000025:
+                command = malloc(sizeof(char) * (strlen("or") + 1)); 
+                strcpy(command, "or");
+                return command;
+            case 0x00000026:
+                command = malloc(sizeof(char) * (strlen("xor") + 1)); 
+                strcpy(command, "xor");
+                return command;
+            case 0x00000004:
+                command = malloc(sizeof(char) * (strlen("sllv") + 1)); 
+                strcpy(command, "sllv");
+                return command;
+            case 0x00000006:
+                command = malloc(sizeof(char) * (strlen("srlv") + 1)); 
+                strcpy(command, "srlv");
+                return command;
+            case 0x0000002A:
+                command = malloc(sizeof(char) * (strlen("slt") + 1)); 
+                strcpy(command, "slt");
+                return command;
+            case 0x00000000:
+                command = malloc(sizeof(char) * (strlen("sll") + 1)); 
+                strcpy(command, "sll");
+                return command;
+            case 0x00000002:
+                command = malloc(sizeof(char) * (strlen("srl") + 1)); 
+                strcpy(command, "srl");
+                return command;
+            case 0x00000008:
+                command = malloc(sizeof(char) * (strlen("jr") + 1)); 
+                strcpy(command, "jr");
+                return command;
+            case 0x0000000C:
+                command = malloc(sizeof(char) * (strlen("syscall") + 1)); 
+                strcpy(command, "syscall");
+                return command;
+        }
+    }
+    
+    // If the left six bits are 000001, then scan bits 16 to 20
+    // If the program execution reaches here, the command is either blez or bgez
+    int midFive = (instruction >> 16) & 0x0000001F;
+    switch (midFive)  {
+        case 0x00000000:
+            command = malloc(sizeof(char) * (strlen("bltz") + 1)); 
+            strcpy(command, "bltz");
+            return command;
+        case 0x00000001:
+            command = malloc(sizeof(char) * (strlen("bgez") + 1)); 
+            strcpy(command, "bgez");
+            return command;
+    }
+    return NULL;
+}
